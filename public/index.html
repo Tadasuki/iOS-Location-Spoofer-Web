@@ -1160,7 +1160,7 @@ var GCJ = (function(){
 })();
 
 /* ─── State ──────────────────────────────────────────────── */
-var map, currentLayer=(AMAP_KEY?'amap':'osm');
+var map, currentLayer='osm';
 var WGS={lat:39.90872,lng:116.39748}; // current center in WGS-84
 var lockedWGS=null;                   // last saved to server
 var altitude=null,hacc=39,vacc=1000;
@@ -1193,8 +1193,9 @@ function toast(msg){
   toastTimer=setTimeout(function(){el.classList.remove('show');},2200);
 }
 
-function openLocationServices(){
-  window.location.href='App-Prefs:root=Privacy&path=LOCATION';
+function finishShortcutAction(){
+  var callback=new URLSearchParams(window.location.search).get('x-success')||'';
+  window.location.href=/^shortcuts:/i.test(callback)?callback:'shortcuts://';
 }
 
 /* ─── Coordinate display ─────────────────────────────────── */
@@ -1486,7 +1487,7 @@ function lockLocation(){
     updateStatus();
     updateLockedPin(WGS.lat,WGS.lng);
     if(SHORTCUT_ACTION==='set'){
-      setTimeout(openLocationServices,700);
+      setTimeout(finishShortcutAction,700);
     }
   }).catch(function(){
     toast('保存失败，请检查网络或 Token');
@@ -1879,8 +1880,8 @@ handleAuthentication(function(activeToken) {
       body:JSON.stringify({enabled:false})
     }).then(function(r){
       if(!r.ok)throw new Error(r.status);
-      toast('虚拟定位已清空，正在打开定位服务…');
-      setTimeout(openLocationServices,700);
+      toast('虚拟定位已清空，正在返回快捷指令…');
+      setTimeout(finishShortcutAction,700);
     }).catch(function(){
       toast('清空失败，请检查网络或 Token');
     });
