@@ -175,10 +175,10 @@
 
 首次使用前，请先在 Safari 打开管理面板并完成 Token 登录。登录状态有效期内，以下快捷指令无需重复输入 Token：
 
-- [设置定位虚拟指令](https://927726.xyz/shortcuts/%E8%AE%BE%E7%BD%AE%E5%AE%9A%E4%BD%8D%E8%99%9A%E6%8B%9F%E6%8C%87%E4%BB%A4.shortcut)：打开默认的国际地图选择器；锁定位置成功后返回快捷指令，并跳转到「设置 → 隐私权与安全性 → 定位服务」。
-- [清空虚拟定位](https://927726.xyz/shortcuts/%E6%B8%85%E7%A9%BA%E8%99%9A%E6%8B%9F%E5%AE%9A%E4%BD%8D.shortcut)：关闭代理改写并恢复设备真实定位，然后返回快捷指令并跳转到「设置 → 隐私权与安全性 → 定位服务」。
+- [设置定位虚拟指令](https://927726.xyz/shortcuts/%E8%AE%BE%E7%BD%AE%E5%AE%9A%E4%BD%8D%E8%99%9A%E6%8B%9F%E6%8C%87%E4%BB%A4.shortcut)：打开默认的国际地图选择器；锁定位置成功后，在网页确认框中点击“是”即可跳转到「设置 → 隐私权与安全性 → 定位服务」。
+- [清空虚拟定位](https://927726.xyz/shortcuts/%E6%B8%85%E7%A9%BA%E8%99%9A%E6%8B%9F%E5%AE%9A%E4%BD%8D.shortcut)：关闭代理改写并恢复设备真实定位；在网页确认框中点击“是”即可跳转到定位服务设置。
 
-> 快捷指令使用 `prefs:root=Privacy&path=LOCATION` 打开「定位服务」。iOS 26 在切换目标位置后仍可能复用 `locationd` 的旧缓存，需要重启设备后再验证。
+> 网页在操作成功后直接使用 `prefs:root=Privacy&path=LOCATION` 打开「定位服务」，不再经过 x-callback。iOS 26 在切换目标位置后仍可能复用 `locationd` 的旧缓存，需要重启设备后再验证。
 
 ---
 

@@ -1193,9 +1193,13 @@ function toast(msg){
   toastTimer=setTimeout(function(){el.classList.remove('show');},2200);
 }
 
-function finishShortcutAction(){
-  var callback=new URLSearchParams(window.location.search).get('x-success')||'';
-  window.location.href=/^shortcuts:/i.test(callback)?callback:'shortcuts://';
+function finishShortcutAction(message){
+  var confirmed=window.confirm(
+    message+'\n\n是否现在打开「设置 → 隐私权与安全性 → 定位服务」？'
+  );
+  if(confirmed){
+    window.location.href='prefs:root=Privacy&path=LOCATION';
+  }
 }
 
 /* ─── Coordinate display ─────────────────────────────────── */
@@ -1487,7 +1491,7 @@ function lockLocation(){
     updateStatus();
     updateLockedPin(WGS.lat,WGS.lng);
     if(SHORTCUT_ACTION==='set'){
-      setTimeout(finishShortcutAction,700);
+      finishShortcutAction('虚拟位置已锁定。');
     }
   }).catch(function(){
     toast('保存失败，请检查网络或 Token');
@@ -1880,8 +1884,8 @@ handleAuthentication(function(activeToken) {
       body:JSON.stringify({enabled:false})
     }).then(function(r){
       if(!r.ok)throw new Error(r.status);
-      toast('虚拟定位已清空，正在返回快捷指令…');
-      setTimeout(finishShortcutAction,700);
+      toast('虚拟定位已清空');
+      finishShortcutAction('虚拟定位已清空，设备将恢复真实定位。');
     }).catch(function(){
       toast('清空失败，请检查网络或 Token');
     });
