@@ -7,6 +7,7 @@
  */
 
 export const DEFAULT_LOC = {
+  enabled:            true,
   latitude:           39.90872,
   longitude:          116.39748,
   altitude:           44,

@@ -742,6 +742,7 @@
     cfg.horizontalAccuracy = Number(cfg.horizontalAccuracy) || 39;
     cfg.verticalAccuracy = Number(cfg.verticalAccuracy) || 1000;
     cfg.altitude = Number(cfg.altitude) || 44;
+    cfg.enabled = cfg.enabled !== false && cfg.enabled !== "false";
     cfg.debug = cfg.debug === true || cfg.debug === "true";
     cfg.failOpen = cfg.failOpen !== false && cfg.failOpen !== "false";
     return cfg;
@@ -867,15 +868,24 @@
     if (config.configUrl) {
       fetchRemoteConfig(config.configUrl, function (remoteData) {
         if (remoteData) {
+          if (remoteData.enabled != null) config.enabled = remoteData.enabled !== false && remoteData.enabled !== "false";
           if (remoteData.latitude != null) config.latitude = Number(remoteData.latitude);
           if (remoteData.longitude != null) config.longitude = Number(remoteData.longitude);
           if (remoteData.horizontalAccuracy != null) config.horizontalAccuracy = Number(remoteData.horizontalAccuracy);
           if (remoteData.verticalAccuracy != null) config.verticalAccuracy = Number(remoteData.verticalAccuracy);
           if (remoteData.altitude != null) config.altitude = Number(remoteData.altitude);
         }
+        if (!config.enabled) {
+          passThrough();
+          return;
+        }
         processRewrite(config);
       });
     } else {
+      if (!config.enabled) {
+        passThrough();
+        return;
+      }
       processRewrite(config);
     }
   }

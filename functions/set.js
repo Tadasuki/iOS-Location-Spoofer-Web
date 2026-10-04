@@ -24,6 +24,7 @@ export async function onRequestPost(context) {
     }
 
     const updated = { ...current };
+    if (typeof data.enabled            === 'boolean') updated.enabled            = data.enabled;
     if (typeof data.latitude           === 'number') updated.latitude           = data.latitude;
     if (typeof data.longitude          === 'number') updated.longitude          = data.longitude;
     if (typeof data.altitude           === 'number') updated.altitude           = data.altitude;

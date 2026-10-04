@@ -1122,6 +1122,7 @@ html.dark #search-results::-webkit-scrollbar-thumb {
 var CFG = window.__CFG__ || {};
 var HAS_TOKEN = CFG.hasToken === true;
 var AMAP_KEY = CFG.amapKey || '';
+var SHORTCUT_ACTION = new URLSearchParams(window.location.search).get('shortcut') || '';
 var API = function(p){ 
   var t = localStorage.getItem('gps_token') || '';
   return p + (t ? '?token=' + encodeURIComponent(t) : ''); 
@@ -1190,6 +1191,10 @@ function toast(msg){
   el.textContent=msg;el.classList.add('show');
   if(toastTimer)clearTimeout(toastTimer);
   toastTimer=setTimeout(function(){el.classList.remove('show');},2200);
+}
+
+function openLocationServices(){
+  window.location.href='App-Prefs:root=Privacy&path=LOCATION';
 }
 
 /* ─── Coordinate display ─────────────────────────────────── */
@@ -1462,6 +1467,7 @@ function lockLocation(){
   var vaccVal=$id('inp-vacc').value?parseFloat($id('inp-vacc').value):vacc;
 
   var payload={
+    enabled:true,
     latitude:WGS.lat,longitude:WGS.lng,
     altitude:altVal||0,
     horizontalAccuracy:haccVal||39,
@@ -1479,6 +1485,9 @@ function lockLocation(){
     toast('位置已锁定！请前往系统 定位服务 重新开关生效');
     updateStatus();
     updateLockedPin(WGS.lat,WGS.lng);
+    if(SHORTCUT_ACTION==='set'){
+      setTimeout(openLocationServices,700);
+    }
   }).catch(function(){
     toast('保存失败，请检查网络或 Token');
   }).finally(function(){
@@ -1862,6 +1871,21 @@ handleAuthentication(function(activeToken) {
     var t = activeToken || localStorage.getItem('gps_token') || '';
     return p + (t ? '?token=' + encodeURIComponent(t) : '');
   };
+
+  if(SHORTCUT_ACTION==='clear'){
+    fetch(API('/set'),{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({enabled:false})
+    }).then(function(r){
+      if(!r.ok)throw new Error(r.status);
+      toast('虚拟定位已清空，正在打开定位服务…');
+      setTimeout(openLocationServices,700);
+    }).catch(function(){
+      toast('清空失败，请检查网络或 Token');
+    });
+    return;
+  }
 
   fetch(API('/loc.json'))
     .then(function(r){return r.json();})
