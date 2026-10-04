@@ -825,12 +825,12 @@
       headers["X-Location-Spoofer-Wifi"] = String(wifiCount);
       headers["X-Location-Spoofer-Cell"] = String(cellCount);
 
+      // http-response scripts must return the rewritten response fields at the
+      // top level. A nested `response` object is only valid when synthesizing a
+      // response from an http-request script and is ignored here.
       $done({
-        response: {
-          status: 200,
-          headers: headers,
-          body: bodyBytes
-        }
+        headers: headers,
+        body: bodyBytes
       });
     }
 
