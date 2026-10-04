@@ -765,6 +765,21 @@ html.dark #search-results::-webkit-scrollbar-thumb {
 #btn-lock:active{transform:scale(.95);background:var(--green-hover);box-shadow:none;}
 #btn-lock.locking{background:#aaa;pointer-events:none;}
 
+#btn-restore{
+  height:48px;padding:0 16px;
+  background:rgba(255,59,48,.1);
+  color:var(--system-red);font-size:15px;font-weight:600;
+  border:1px solid rgba(255,59,48,.18);border-radius:var(--r-md);cursor:pointer;
+  display:flex;align-items:center;justify-content:center;gap:7px;flex-shrink:0;
+  transition:transform .15s,background .15s,color .15s,border-color .15s;
+}
+#btn-restore:active{transform:scale(.95);background:rgba(255,59,48,.2);}
+#btn-restore.restoring{color:var(--text-secondary);border-color:transparent;background:rgba(60,60,67,.08);pointer-events:none;}
+html.dark #btn-restore{background:rgba(255,69,58,.16);border-color:rgba(255,69,58,.24);}
+@media(max-width:380px){
+  #btn-lock,#btn-restore{padding:0 12px;}
+}
+
 /* Expanded section (hidden by default) */
 #drawer-expanded{
   padding:0 16px 8px;
@@ -1085,6 +1100,10 @@ html.dark #search-results::-webkit-scrollbar-thumb {
       <span id="status-dot"></span>
       <span id="status-text">点击地图选择位置</span>
     </div>
+    <button id="btn-restore" aria-label="恢复设备真实位置">
+      <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2.3" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7"></path><path d="M3 4v6h6"></path></svg>
+      <span id="btn-restore-label">恢复</span>
+    </button>
     <button id="btn-lock">
       <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 4px;"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
       <span id="btn-lock-label">锁定</span>
@@ -1121,8 +1140,6 @@ html.dark #search-results::-webkit-scrollbar-thumb {
 /* ─── Runtime config injected by server ─────────────────── */
 var CFG = window.__CFG__ || {};
 var HAS_TOKEN = CFG.hasToken === true;
-var AMAP_KEY = CFG.amapKey || '';
-var SHORTCUT_ACTION = new URLSearchParams(window.location.search).get('shortcut') || '';
 var API = function(p){ 
   var t = localStorage.getItem('gps_token') || '';
   return p + (t ? '?token=' + encodeURIComponent(t) : ''); 
@@ -1163,6 +1180,7 @@ var GCJ = (function(){
 var map, currentLayer='osm';
 var WGS={lat:39.90872,lng:116.39748}; // current center in WGS-84
 var lockedWGS=null;                   // last saved to server
+var spoofingEnabled=true;
 var altitude=null,hacc=39,vacc=1000;
 var altFetchTimer=null;
 var drawerExpanded=false;
@@ -1178,6 +1196,8 @@ var elBubbleCoords=$id('bubble-coords'),
     elStatusText=$id('status-text'),
     elBtnLock=$id('btn-lock'),
     elBtnLockLabel=$id('btn-lock-label'),
+    elBtnRestore=$id('btn-restore'),
+    elBtnRestoreLabel=$id('btn-restore-label'),
     elDrawerExpanded=$id('drawer-expanded'),
     elFavList=$id('fav-list'),
     elFavBadge=$id('fav-badge'),
@@ -1193,15 +1213,6 @@ function toast(msg){
   toastTimer=setTimeout(function(){el.classList.remove('show');},2200);
 }
 
-function finishShortcutAction(message){
-  var confirmed=window.confirm(
-    message+'\n\n是否现在打开「设置 → 隐私权与安全性 → 定位服务」？'
-  );
-  if(confirmed){
-    window.location.href='prefs:root=Privacy&path=LOCATION';
-  }
-}
-
 /* ─── Coordinate display ─────────────────────────────────── */
 function fmtCoord(v,pos,neg){
   var dir=v>=0?pos:neg;
@@ -1212,6 +1223,11 @@ function updateBubble(){
   elBubbleAlt.textContent=altitude!==null?('海拔 '+Math.round(altitude)+' m'):'海拔 — m';
 }
 function updateStatus(){
+  if(!spoofingEnabled){
+    elStatusDot.className='status-dot saved';
+    elStatusText.textContent='已恢复设备真实位置';
+    return;
+  }
   if(!lockedWGS){
     elStatusDot.className='status-dot';
     elStatusText.textContent='拖动地图，然后点「锁定」';
@@ -1316,7 +1332,7 @@ function switchLayer(name){
 }
 
 /* ─── Search ─────────────────────────────────────────────── */
-var searchDebounce=null;
+var searchController=null;
 var searchHistory = [];
 var HISTORY_KEY = 'ios_loc_spoofer_history';
 
@@ -1389,64 +1405,45 @@ function doSearch(){
   box.innerHTML='<div class="result-row"><span class="name">搜索中…</span></div>';
   box.style.display='block';
 
-  if (AMAP_KEY) {
-    fetch('https://restapi.amap.com/v3/assistant/inputtips?keywords='+encodeURIComponent(q)+'&key='+AMAP_KEY)
-      .then(function(r){return r.json();})
-      .then(function(d){
-        box.innerHTML='';
-        if(d.status !== '1' || !d.tips || !d.tips.length){
-          box.innerHTML='<div class="result-row"><span class="name">未找到结果</span></div>';
-          return;
-        }
-        d.tips.forEach(function(it){
-          if (!it.location || typeof it.location !== 'string') return;
-          var row=document.createElement('div');row.className='result-row';
-          var locParts = it.location.split(',');
-          var gcjLng = parseFloat(locParts[0]);
-          var gcjLat = parseFloat(locParts[1]);
-          row.innerHTML='<div class="name">'+escHtml(it.name)+'</div>'
-                       +'<div class="sub">'+escHtml((it.district || '') + (it.address || ''))+'</div>';
-          row.addEventListener('click',function(){
-            var disp = (currentLayer === 'osm'||currentLayer === 'esri') ? GCJ.g2w(gcjLat, gcjLng) : [gcjLat, gcjLng];
-            map.setView([disp[0], disp[1]], 16, {animate:true});
-            box.style.display='none';
-            $id('search-input').value='';
-          });
-          box.appendChild(row);
+  if(searchController)searchController.abort();
+  searchController=typeof AbortController==='function'?new AbortController():null;
+  var searchUrl=API('/search');
+  searchUrl+=(searchUrl.indexOf('?')>=0?'&':'?')+'q='+encodeURIComponent(q);
+  fetch(searchUrl,searchController?{signal:searchController.signal}:{})
+    .then(function(r){
+      if(!r.ok)throw new Error(String(r.status));
+      return r.json();
+    })
+    .then(function(d){
+      box.innerHTML='';
+      var results=d&&Array.isArray(d.results)?d.results:[];
+      if(!results.length){
+        box.innerHTML='<div class="result-row"><span class="name">未找到地点</span><div class="sub">尝试输入更完整的地区或城市名称</div></div>';
+        return;
+      }
+      results.forEach(function(it){
+        var lat=Number(it.latitude),lng=Number(it.longitude);
+        if(!Number.isFinite(lat)||!Number.isFinite(lng))return;
+        var row=document.createElement('div');row.className='result-row';
+        row.innerHTML='<div class="name">'+escHtml(it.name||'未命名地点')+'</div>'
+                     +'<div class="sub">'+escHtml(it.address||'')+'</div>';
+        row.addEventListener('click',function(){
+          var isGcj=it.coordinateSystem==='gcj02';
+          var wgs=isGcj?GCJ.g2w(lat,lng):[lat,lng];
+          var disp=(currentLayer==='osm'||currentLayer==='esri')?wgs:GCJ.w2g(wgs[0],wgs[1]);
+          map.setView([disp[0],disp[1]],16,{animate:true});
+          box.style.display='none';
+          $id('search-input').value='';
         });
-        if (!box.children.length) {
-          box.innerHTML='<div class="result-row"><span class="name">无有效定位结果</span></div>';
-        }
-      }).catch(function(){
-        box.innerHTML='<div class="result-row"><span class="name">搜索失败，请重试</span></div>';
+        box.appendChild(row);
       });
-  } else {
-    fetch('https://nominatim.openstreetmap.org/search?format=json&limit=6&q='+encodeURIComponent(q))
-      .then(function(r){return r.json();})
-      .then(function(a){
-        box.innerHTML='';
-        if(!a||!a.length){
-          box.innerHTML='<div class="result-row"><span class="name">未找到结果 (国内搜索建议配置高德 Key)</span></div>';
-          return;
-        }
-        a.forEach(function(it){
-          var row=document.createElement('div');row.className='result-row';
-          var parts=it.display_name.split(',');
-          row.innerHTML='<div class="name">'+parts[0]+'</div>'
-                       +'<div class="sub">'+parts.slice(1,3).join(',')+'</div>';
-          row.addEventListener('click',function(){
-            var wLat=+it.lat,wLng=+it.lon;
-            var disp=(currentLayer==='osm'||currentLayer==='esri')?[wLat,wLng]:GCJ.w2g(wLat,wLng);
-            map.setView([disp[0], disp[1]], 16, {animate:true});
-            box.style.display='none';
-            $id('search-input').value='';
-          });
-          box.appendChild(row);
-        });
-      }).catch(function(){
-        box.innerHTML='<div class="result-row"><span class="name">搜索失败，请重试</span></div>';
-      });
-  }
+      if(!box.children.length){
+        box.innerHTML='<div class="result-row"><span class="name">未找到有效定位结果</span></div>';
+      }
+    }).catch(function(err){
+      if(err&&err.name==='AbortError')return;
+      box.innerHTML='<div class="result-row"><span class="name">搜索暂时不可用</span><div class="sub">请稍后重试，或直接输入经纬度</div></div>';
+    });
 }
 $id('search-btn').addEventListener('click',doSearch);
 $id('search-input').addEventListener('keydown',function(e){if(e.key==='Enter')doSearch();});
@@ -1484,15 +1481,13 @@ function lockLocation(){
     body:JSON.stringify(payload)
   }).then(function(r){
     if(!r.ok)throw new Error(r.status);
+    spoofingEnabled=true;
     lockedWGS={lat:WGS.lat,lng:WGS.lng};
     $id('crosshair').classList.add('locked');
     setTimeout(function(){$id('crosshair').classList.remove('locked');},400);
     toast('位置已锁定！请前往系统 定位服务 重新开关生效');
     updateStatus();
     updateLockedPin(WGS.lat,WGS.lng);
-    if(SHORTCUT_ACTION==='set'){
-      finishShortcutAction('虚拟位置已锁定。');
-    }
   }).catch(function(){
     toast('保存失败，请检查网络或 Token');
   }).finally(function(){
@@ -1501,6 +1496,31 @@ function lockLocation(){
   });
 }
 elBtnLock.addEventListener('click',lockLocation);
+
+function restoreRealLocation(){
+  elBtnRestore.classList.add('restoring');
+  elBtnRestoreLabel.textContent='恢复中…';
+  elBtnLock.disabled=true;
+  fetch(API('/set'),{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({enabled:false})
+  }).then(function(r){
+    if(!r.ok)throw new Error(r.status);
+    spoofingEnabled=false;
+    lockedWGS=null;
+    if(lockedMarker){map.removeLayer(lockedMarker);lockedMarker=null;}
+    updateStatus();
+    toast('已恢复设备真实位置');
+  }).catch(function(){
+    toast('恢复失败，请检查网络或 Token');
+  }).finally(function(){
+    elBtnRestore.classList.remove('restoring');
+    elBtnRestoreLabel.textContent='恢复';
+    elBtnLock.disabled=false;
+  });
+}
+elBtnRestore.addEventListener('click',restoreRealLocation);
 
 /* ─── Locked position pin ────────────────────────── */
 var lockedMarker = null;
@@ -1877,26 +1897,12 @@ handleAuthentication(function(activeToken) {
     return p + (t ? '?token=' + encodeURIComponent(t) : '');
   };
 
-  if(SHORTCUT_ACTION==='clear'){
-    fetch(API('/set'),{
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({enabled:false})
-    }).then(function(r){
-      if(!r.ok)throw new Error(r.status);
-      toast('虚拟定位已清空');
-      finishShortcutAction('虚拟定位已清空，设备将恢复真实定位。');
-    }).catch(function(){
-      toast('清空失败，请检查网络或 Token');
-    });
-    return;
-  }
-
   fetch(API('/loc.json'))
     .then(function(r){return r.json();})
     .then(function(d){
       WGS={lat:d.latitude||39.90872,lng:d.longitude||116.39748};
-      lockedWGS={lat:WGS.lat,lng:WGS.lng};
+      spoofingEnabled=d.enabled!==false;
+      lockedWGS=spoofingEnabled?{lat:WGS.lat,lng:WGS.lng}:null;
       altitude=d.altitude||null;
       hacc=d.horizontalAccuracy||39;
       vacc=d.verticalAccuracy||1000;
@@ -1904,7 +1910,7 @@ handleAuthentication(function(activeToken) {
       $id('inp-vacc').placeholder=vacc;
       if(altitude!==null)$id('inp-alt').placeholder=Math.round(altitude);
       initMap(WGS.lat,WGS.lng);
-      updateLockedPin(lockedWGS.lat, lockedWGS.lng);
+      if(lockedWGS)updateLockedPin(lockedWGS.lat, lockedWGS.lng);
       updateBubble();
       updateStatus();
       loadHistory();
@@ -1923,10 +1929,6 @@ handleAuthentication(function(activeToken) {
       toast('无法连接服务器，请检查 Token');
     });
 });
-
-if (!AMAP_KEY) {
-  $id('search-input').placeholder = '搜索地点 (国内搜索建议配置高德 Key)';
-}
 
 })();
 </script>
